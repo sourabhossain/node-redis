@@ -23,15 +23,15 @@ class Redis {
 		}, 1000); // tick every second
 	}
 
-	appendKeyInExpirationMap(timeIn10Sec, key) {
-		const list = this.expirationMap[timeIn10Sec];
+	appendKeyInExpirationMap(duration, key) {
+		const list = this.expirationMap[duration];
 
 		if (list) {
 			list.push(key);
 			return;
 		}
 
-		this.expirationMap.set(timeIn10Sec, [key]);
+		this.expirationMap.set(duration, [key]);
 	}
 
 	constructor() {
