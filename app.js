@@ -1,54 +1,68 @@
+// supports expiration in 1 sec interval.
 class Redis {
-	#client;
+  #database;
+  tickEverySecond() {
+    setInterval(() => {
+      // current time
+      const time = Math.ceil(new Date().getTime() / 1000);
 
-	constructor() {
-		this.client = new Map();
-		this.timestamp = new Map();
+      console.log(time);
 
-		setInterval(() => {
-			const time = new Date().getTime();
+      if (this.expirationMap.has(time)) {
+        // expirationMap keys are time stamps
+        const valuesToDelete = this.expirationMap.get(time);
 
-			if (this.timestamp.size > 0 && this.timestamp.has(time)) {
-				const keys = this?.client?.keys();
+        // against expirationMap[time] we have array of keys that will expire in given time
+        valuesToDelete.forEach((key) => this.database.delete(key));
 
-				for (const key of keys) {
-					const value = this?.client?.get(key);
+        // optionally delete expirationMap[time]
+        this.expirationMap.delete(time);
+      }
+    }, 1000); // tick every second
+  }
 
-					if (time - value?.ex > value?.duration) {
-						this.client?.delete(key);
-					}
-				}
+  appendKeyInExpirationMap(timeIn10Sec, key) {
+    const list = this.expirationMap[timeIn10Sec];
+    if (!list) this.expirationMap.set(timeIn10Sec, [key]);
+    else list.push(key);
+    console.log(this.expirationMap);
+  }
 
-				this.timestamp.delete(time);
-			}
-		}, 1000);
-	}
+  constructor() {
+    this.database = new Map();
+    this.expirationMap = new Map();
+    this.tickEverySecond();
+  }
 
-	set(key, value, ex, duration, callback = null) {
-		this.timestamp.set(ex + duration, 1);
-		this.client.set(key, { value, ex, duration });
-		callback?.();
-	}
+  set(key, value, durationIn10Sec, callback = null) {
+    this.database.set(key, value);
+    this.appendKeyInExpirationMap(
+      Math.ceil(new Date().getTime() / 1000) + durationIn10Sec,
+      key
+    );
 
-	get(key, callback = null) {
-		const value = this.client.get(key);
-		callback?.(value);
-		return value;
-	}
+    callback?.();
+  }
 
-	del(key, callback = null) {
-		this.client.delete(key);
-		callback?.();
-	}
+  get(key, callback = null) {
+    const value = this.database.get(key);
+    callback?.(value);
+    return value;
+  }
 
-	quit(callback = null) {
-		this.client.clear();
-		callback?.();
-	}
+  del(key, callback = null) {
+    this.database.delete(key);
+    callback?.();
+  }
 
-	getAllKeys() {
-		return this.client.keys();
-	}
+  quit(callback = null) {
+    this.database.clear();
+    callback?.();
+  }
+
+  getAllKeys() {
+    return this.database.keys();
+  }
 }
 
 // module.exports = Redis;
@@ -56,25 +70,10 @@ class Redis {
 let object = new Redis();
 const time = new Date().getTime();
 
-object.set("name", "John Doe", time, 2000);
-object.set("subject", "System Deign", time, 5000);
-object.set("roll", "1001", time, 3000);
-
-// setInterval(() => {
-// 	const objectAllKeys = object.getAllKeys();
-
-// 	for (const key of objectAllKeys) {
-// 		const value = object.get(key);
-// 		const time = new Date().getTime() - value.ex;
-
-// 		if (time > value.duration) {
-// 			object.del(key);
-// 		}
-// 	}
-
-// 	console.log("----->::: ", object.getAllKeys());
-// }, 1000);
+object.set("name", "John Doe", 7);
+object.set("subject", "System Deign", 5);
+object.set("roll", "1001", 3);
 
 setInterval(() => {
-	console.log("----->::: ", object.getAllKeys());
+  console.log("----->::: ", object.getAllKeys());
 }, 1000);
