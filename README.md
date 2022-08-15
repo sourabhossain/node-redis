@@ -1,1 +1,1 @@
-# node-redis
+# Simple Redis Client
