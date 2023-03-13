@@ -1,66 +1,65 @@
 class Redis {
-	#database;
+	#database = new Map();
+	#expirationMap = new Map();
+	#timerId;
+
+	constructor() {
+		this.#tickEverySecond();
+	}
 
 	#getCurrentTimePerSecond() {
 		return Math.ceil(new Date().getTime() / 1000);
 	}
 
-	tickEverySecond() {
-		setInterval(() => {
+	#tickEverySecond() {
+		this.#timerId = setInterval(() => {
 			const currentTimePerSecond = this.#getCurrentTimePerSecond();
 
-			if (this.expirationMap.has(currentTimePerSecond)) {
-				// expirationMap keys are time stamps
-				const valuesToDelete =
-					this.expirationMap.get(currentTimePerSecond);
-
-				// against expirationMap[time] we have array of keys that will expire in given time
-				valuesToDelete.forEach((key) => this.database.delete(key));
-
-				// optionally delete expirationMap[time]
-				this.expirationMap.delete(currentTimePerSecond);
+			if (!this.#expirationMap.has(currentTimePerSecond)) {
+				return;
 			}
-		}, 1000); // tick every second
+
+			const keysToExpire = this.#expirationMap.get(currentTimePerSecond);
+			keysToExpire.forEach((key) => this.#database.delete(key));
+
+			this.#expirationMap.delete(currentTimePerSecond);
+		}, 1000);
 	}
 
-	appendKeyInExpirationMap(duration, key) {
-		const list = this.expirationMap[duration];
+	#addKeyToExpirationMap(key, expirationTime) {
+		const keysToExpire = this.#expirationMap.get(expirationTime) || [];
+		keysToExpire.push(key);
+		this.#expirationMap.set(expirationTime, keysToExpire);
+	}
 
-		if (list) {
-			list.push(key);
-			return;
+	set(key, value, durationInSeconds) {
+		if (durationInSeconds <= 0) {
+			throw new Error("Duration must be a positive number.");
 		}
 
-		this.expirationMap.set(duration, [key]);
-	}
-
-	constructor() {
-		this.database = new Map();
-		this.expirationMap = new Map();
-		this.tickEverySecond();
-	}
-
-	set(key, value, duration) {
-		this.database.set(key, value);
-		const currentTimePerSecond = this.#getCurrentTimePerSecond();
-		this.appendKeyInExpirationMap(currentTimePerSecond + duration, key);
+		const expirationTime =
+			this.#getCurrentTimePerSecond() + durationInSeconds;
+		this.#addKeyToExpirationMap(key, expirationTime);
+		this.#database.set(key, value);
 	}
 
 	get(key) {
-		return this.database.get(key);
+		return this.#database.get(key);
 	}
 
 	del(key) {
-		this.database.delete(key);
+		this.#database.delete(key);
 	}
 
 	quit() {
-		this.database.clear();
+		clearInterval(this.#timerId);
+		this.#database.clear();
+		this.#expirationMap.clear();
 	}
 
 	getAllKeys() {
-		return this.database.keys();
+		return this.#database.keys();
 	}
 }
 
-module.exports = new Redis();
+module.exports = new Redis;
